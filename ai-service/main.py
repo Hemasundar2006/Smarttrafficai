@@ -14,7 +14,7 @@ from flask import Flask, Response
 from flask_cors import CORS
 import threading
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:5000/api")
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://smart-traffic-backend-x5ke.onrender.com/api")
 LANES = ["north", "south", "east", "west"]
 
 # Initialize Flask App for MJPEG streaming

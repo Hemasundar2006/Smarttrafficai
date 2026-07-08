@@ -22,6 +22,12 @@ import {
   LogOut
 } from "lucide-react";
 
+const backendBaseUrl = import.meta.env.VITE_API_URL 
+  ? import.meta.env.VITE_API_URL.replace(/\/api$/, "") 
+  : "https://smart-traffic-backend-x5ke.onrender.com";
+
+const aiStreamUrl = import.meta.env.VITE_AI_STREAM_URL || "http://localhost:5001/video_feed";
+
 export default function App() {
   const [signals, setSignals] = useState([]);
   const [violations, setViolations] = useState([]);
@@ -331,7 +337,7 @@ export default function App() {
 
               <div className="flex-1 bg-slate-100 rounded-xl overflow-hidden border border-slate-200/60 flex items-center justify-center relative aspect-video shadow-md">
                 <img 
-                  src="http://localhost:5001/video_feed" 
+                  src={aiStreamUrl} 
                   alt="Live Traffic Stream" 
                   className="w-full h-full object-cover"
                   onError={(e) => {
@@ -510,7 +516,7 @@ export default function App() {
                   >
                     {v.imageUrl ? (
                       <img 
-                        src={`http://localhost:5000${v.imageUrl}`} 
+                        src={`${backendBaseUrl}${v.imageUrl}`} 
                         alt="Violation Proof"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
@@ -587,7 +593,7 @@ export default function App() {
               {/* Full Screenshot Proof */}
               <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-150 aspect-video mb-4 flex items-center justify-center relative shadow-inner">
                 <img 
-                  src={`http://localhost:5000${selectedViolation.imageUrl}`} 
+                  src={`${backendBaseUrl}${selectedViolation.imageUrl}`} 
                   alt="Violation Screenshot" 
                   className="w-full h-full object-contain"
                 />
