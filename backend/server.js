@@ -201,6 +201,16 @@ app.get("/api/seed", async (req, res) => {
     // Clear existing sample data
     await SignalState.deleteMany({});
     await Violation.deleteMany({});
+    await User.deleteMany({});
+
+    // Seed admin credentials
+    const salt = crypto.randomBytes(16).toString("hex");
+    const hash = crypto.pbkdf2Sync("ongpolice", salt, 1000, 64, "sha512").toString("hex");
+    await User.create({
+      email: "ongolepolice100@gmail.com",
+      salt,
+      hash
+    });
 
     // Seed traffic signal density states
     await SignalState.create([
