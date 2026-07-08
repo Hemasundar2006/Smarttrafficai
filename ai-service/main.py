@@ -14,7 +14,7 @@ from flask import Flask, Response
 from flask_cors import CORS
 import threading
 
-BACKEND_URL = "http://localhost:5000/api"
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:5000/api")
 LANES = ["north", "south", "east", "west"]
 
 # Initialize Flask App for MJPEG streaming
@@ -45,7 +45,8 @@ def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def start_flask_server():
-    flask_app.run(host='0.0.0.0', port=5001, threaded=True, debug=False, use_reloader=False)
+    port = int(os.environ.get("PORT", 5001))
+    flask_app.run(host='0.0.0.0', port=port, threaded=True, debug=False, use_reloader=False)
 
 def push_signal_state(state):
     try:
