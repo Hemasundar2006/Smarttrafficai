@@ -6,9 +6,11 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const morgan = require("morgan");
+const crypto = require("crypto");
 
 const Violation = require("./models/Violation");
 const SignalState = require("./models/SignalState");
+const User = require("./models/User");
 
 const app = express();
 app.use(cors());
@@ -40,11 +42,30 @@ const configSchema = new mongoose.Schema({
 });
 const Config = mongoose.model("Config", configSchema);
 
+async function seedAdmin() {
+  try {
+    const adminExists = await User.findOne({ email: "ongolepolice100@gmail.com" });
+    if (!adminExists) {
+      const salt = crypto.randomBytes(16).toString("hex");
+      const hash = crypto.pbkdf2Sync("ongpolice", salt, 1000, 64, "sha512").toString("hex");
+      await User.create({
+        email: "ongolepolice100@gmail.com",
+        salt,
+        hash
+      });
+      console.log("[Database Seeder] Default admin user created successfully.");
+    }
+  } catch (err) {
+    console.error("Error seeding default admin:", err);
+  }
+}
+
 // Database Connection
 const mongoURI = process.env.MONGO_URI || "mongodb://localhost:27017/traffic_system";
 mongoose.connect(mongoURI)
   .then(() => {
     console.log(`MongoDB connected successfully to cluster.`);
+    seedAdmin();
   })
   .catch(err => {
     console.error("\n========================================================");
@@ -54,6 +75,29 @@ mongoose.connect(mongoURI)
     console.error("========================================================\n");
     process.exit(1);
   });
+
+// ---- Authentication APIs ----
+app.post("/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ success: false, message: "Email and password are required" });
+    }
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ success: false, message: "Invalid Email or Password" });
+    }
+    const hash = crypto.pbkdf2Sync(password, user.salt, 1000, 64, "sha512").toString("hex");
+    if (hash === user.hash) {
+      res.json({ success: true, message: "Logged in successfully" });
+    } else {
+      res.status(401).json({ success: false, message: "Invalid Email or Password" });
+    }
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ success: false, message: "Internal Server Error" });
+  }
+});
 
 // ---- Configuration APIs ----
 app.get("/api/config", async (req, res) => {

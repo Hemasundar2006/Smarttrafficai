@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getSignals, getViolations } from "./api";
+import { getSignals, getViolations, login } from "./api";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { 
   Activity, 
@@ -43,14 +43,19 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [loginError, setLoginError] = useState("");
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    if (username === "ongolepolice100@gmail.com" && password === "ongpolice") {
-      setIsLoggedIn(true);
-      sessionStorage.setItem("isLoggedIn", "true");
-      setLoginError("");
-    } else {
-      setLoginError("Invalid Administrator Credentials");
+    try {
+      const res = await login(username, password);
+      if (res.data.success) {
+        setIsLoggedIn(true);
+        sessionStorage.setItem("isLoggedIn", "true");
+        setLoginError("");
+      } else {
+        setLoginError(res.data.message || "Invalid Administrator Credentials");
+      }
+    } catch (err) {
+      setLoginError(err.response?.data?.message || "Failed to connect to authentication server.");
     }
   };
 

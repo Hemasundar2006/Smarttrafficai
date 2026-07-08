@@ -6,3 +6,4 @@ export const getSignals = () => API.get("/signal");
 export const getViolations = () => API.get("/violations");
 export const getConfig = () => API.get("/config");
 export const updateConfig = (cameraSource) => API.post("/config", { cameraSource });
+export const login = (email, password) => API.post("/login", { email, password });
