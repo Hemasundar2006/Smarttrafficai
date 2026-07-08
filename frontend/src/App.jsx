@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getSignals, getViolations, login } from "./api";
+import { getSignals, getViolations, login, getConfig, updateConfig } from "./api";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { 
   Activity, 
@@ -34,6 +34,8 @@ export default function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [selectedViolation, setSelectedViolation] = useState(null);
+  const [dashboardMode, setDashboardMode] = useState("control"); // "control" (surveillance) or "testing" (prototype)
+  const [cameraSource, setCameraSource] = useState("0");
   
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -64,11 +66,22 @@ export default function App() {
     sessionStorage.removeItem("isLoggedIn");
   };
 
+  const handleSourceChange = async (newSource) => {
+    try {
+      const res = await updateConfig(newSource);
+      if (res.data) {
+        setCameraSource(res.data.cameraSource);
+      }
+    } catch (err) {
+      console.error("Failed to update camera source:", err);
+    }
+  };
+
   const defaultLanes = ["north", "south", "east", "west"];
 
   const poll = async () => {
     try {
-      const [s, v] = await Promise.all([getSignals(), getViolations()]);
+      const [s, v, c] = await Promise.all([getSignals(), getViolations(), getConfig()]);
       
       const fetchedSignals = s.data || [];
       const updatedSignals = defaultLanes.map(laneName => {
@@ -78,6 +91,9 @@ export default function App() {
       
       setSignals(updatedSignals);
       setViolations(v.data || []);
+      if (c && c.data) {
+        setCameraSource(c.data.cameraSource || "0");
+      }
       setIsConnected(true);
     } catch (err) {
       console.error("Polling error:", err);
@@ -210,8 +226,26 @@ export default function App() {
             <h1 className="text-xl font-hud font-extrabold tracking-wider text-slate-900 uppercase flex items-center gap-2">
               Aegis <span className="text-emerald-600">Traffic-AI</span>
             </h1>
-            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-0.5">Control Center Dashboard</p>
+            <p className="text-[10px] uppercase font-bold text-slate-400 tracking-widest mt-0.5">
+              {dashboardMode === "control" ? "Control Center Dashboard" : "Testing & Prototyping Portal"}
+            </p>
           </div>
+        </div>
+
+        {/* Dashboard Mode Toggle */}
+        <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 shadow-[inset_0_1px_2px_rgba(0,0,0,0.02)]">
+          <button
+            onClick={() => setDashboardMode("control")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[10px] font-hud font-bold tracking-wider uppercase transition-all cursor-pointer ${dashboardMode === "control" ? "bg-white text-emerald-600 shadow-sm border border-slate-200/50" : "text-slate-400 hover:text-slate-600"}`}
+          >
+            👮 Control Room
+          </button>
+          <button
+            onClick={() => setDashboardMode("testing")}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[10px] font-hud font-bold tracking-wider uppercase transition-all cursor-pointer ${dashboardMode === "testing" ? "bg-white text-emerald-600 shadow-sm border border-slate-200/50" : "text-slate-400 hover:text-slate-650"}`}
+          >
+            🧪 Testing Portal
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -326,7 +360,9 @@ export default function App() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
                   <Video className="w-4.5 h-4.5 text-emerald-600" />
-                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest font-hud">Junction Camera</h3>
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest font-hud">
+                    Junction Camera - {cameraSource === "0" ? "Webcam" : "Demo Video"}
+                  </h3>
                 </div>
                 <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_rgba(16,185,129,0.6)]" />
@@ -360,6 +396,30 @@ export default function App() {
                   <p className="text-[10px] text-slate-400 mt-1 uppercase font-bold font-hud">python main.py not running</p>
                 </div>
               </div>
+              
+              {/* Simulation Settings Control Panel (Only in Testing Mode) */}
+              {dashboardMode === "testing" && (
+                <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col gap-2 relative z-10">
+                  <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-wider">
+                    <span>Active Stream Source:</span>
+                    <span className="font-hud text-emerald-600 font-extrabold">{cameraSource === "0" ? "📷 WEBCAM" : "🧪 PROTOTYPE VIDEO"}</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleSourceChange("sample_traffic.mp4")}
+                      className={`flex-1 py-2 px-3 rounded-lg text-[9px] font-hud font-extrabold uppercase tracking-widest cursor-pointer transition-all border ${cameraSource === "sample_traffic.mp4" ? "bg-emerald-500 text-white border-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.15)]" : "bg-white text-slate-650 border-slate-200 hover:border-slate-355"}`}
+                    >
+                      🧪 Run Demo Video
+                    </button>
+                    <button
+                      onClick={() => handleSourceChange("0")}
+                      className={`flex-1 py-2 px-3 rounded-lg text-[9px] font-hud font-extrabold uppercase tracking-widest cursor-pointer transition-all border ${cameraSource === "0" ? "bg-emerald-500 text-white border-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.15)]" : "bg-white text-slate-650 border-slate-200 hover:border-slate-355"}`}
+                    >
+                      📷 Run Live Webcam
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Graphical Intersection Map */}

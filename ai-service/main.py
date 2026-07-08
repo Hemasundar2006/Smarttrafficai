@@ -67,7 +67,21 @@ def push_violation(payload, image_path):
     except requests.exceptions.RequestException as e:
         print(f"Failed to push violation to backend: {e}")
 
+current_backend_src = None
+
+def config_poller():
+    global current_backend_src
+    while True:
+        try:
+            current_backend_src = fetch_camera_source()
+        except Exception:
+            pass
+        time.sleep(5)
+
 def run(video_source=0, headless=False):
+    # Start background configuration poller
+    threading.Thread(target=config_poller, daemon=True).start()
+
     # Ensure sample video exists
     if video_source == "sample_traffic.mp4" and not os.path.exists(video_source):
         download_video()
@@ -112,6 +126,32 @@ def run(video_source=0, headless=False):
     frame_count = 0
     try:
         while True:
+            # Check if camera source was updated via backend config
+            global current_backend_src
+            if current_backend_src is not None:
+                parsed_src = int(current_backend_src) if current_backend_src.isdigit() else current_backend_src
+                if parsed_src != video_source:
+                    print(f"[ConfigChange] Camera source updated from {video_source} to {parsed_src}. Re-initializing video capture...")
+                    cap.release()
+                    
+                    if parsed_src == "sample_traffic.mp4" and not os.path.exists(parsed_src):
+                        download_video()
+                    
+                    video_source = parsed_src
+                    cap = cv2.VideoCapture(video_source)
+                    
+                    ok, new_frame = cap.read()
+                    if ok:
+                        frame = new_frame
+                        height, width = frame.shape[:2]
+                        stop_line_y = int(height * 0.7)
+                        stop_line = ((50, stop_line_y), (width - 50, stop_line_y))
+                        violation_detector = ViolationDetector(stop_line)
+                        frame_count = 0
+                        print(f"Video Re-initialized successfully. Resolution: {width}x{height}")
+                    else:
+                        print(f"Error: Could not read frame from new source {video_source}")
+
             # For video playback, read next frame.
             if frame_count > 0:
                 ok, frame = cap.read()
