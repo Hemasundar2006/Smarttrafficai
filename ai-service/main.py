@@ -239,16 +239,16 @@ def fetch_camera_source():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Smart AI Traffic Management System Controller")
-    parser.add_argument("--source", type=str, default="0", help="Video source file or camera index (default: 0 for webcam)")
+    parser.add_argument("--source", type=str, default=None, help="Video source file or camera index (default: 0 for webcam)")
     parser.add_argument("--headless", action="store_true", help="Run without opening window visualization (useful for servers)")
     args = parser.parse_args()
 
-    # Load source from backend config, fallback to CLI argument if overridden
-    backend_src = fetch_camera_source()
-    if args.source == "0" and backend_src != "0":
-        src = backend_src
-    else:
+    # If source is explicitly provided, use it. Otherwise fallback to database config or default '0'
+    if args.source is not None:
         src = args.source
+    else:
+        backend_src = fetch_camera_source()
+        src = backend_src if backend_src else "0"
 
     # Determine if source is an integer (camera index)
     if src.isdigit():
