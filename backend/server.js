@@ -195,6 +195,36 @@ app.get("/api/violations", async (req, res) => {
   }
 });
 
+// ---- Database Seeding API ----
+app.get("/api/seed", async (req, res) => {
+  try {
+    // Clear existing sample data
+    await SignalState.deleteMany({});
+    await Violation.deleteMany({});
+
+    // Seed traffic signal density states
+    await SignalState.create([
+      { lane: "north", signal: "RED", duration: 12, count: 4 },
+      { lane: "south", signal: "GREEN", duration: 25, count: 6 },
+      { lane: "east", signal: "RED", duration: 12, count: 1 },
+      { lane: "west", signal: "RED", duration: 12, count: 2 }
+    ]);
+
+    // Seed sample traffic violations
+    await Violation.create([
+      { lane: "north", vehicleId: 4, plate: "AP27AX9821", imageUrl: null, timestamp: new Date(Date.now() - 3600000) },
+      { lane: "east", vehicleId: 18, plate: "MH12CD5678", imageUrl: null, timestamp: new Date(Date.now() - 7200000) },
+      { lane: "west", vehicleId: 23, plate: "KA03MM1122", imageUrl: null, timestamp: new Date(Date.now() - 10800000) },
+      { lane: "north", vehicleId: 35, plate: "DL04CA4321", imageUrl: null, timestamp: new Date(Date.now() - 14400000) }
+    ]);
+
+    res.json({ success: true, message: "Database seeded successfully with sample signals and violations!" });
+  } catch (error) {
+    console.error("Seeding error:", error);
+    res.status(500).json({ success: false, message: "Failed to seed database" });
+  }
+});
+
 // ---- Health Check ----
 app.get("/api/health", (req, res) => {
   res.json({ 
