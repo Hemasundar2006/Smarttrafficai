@@ -45,7 +45,7 @@ export default function App() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (username === "admin" && password === "admin") {
+    if (username === "ongolepolice100@gmail.com" && password === "ongpolice") {
       setIsLoggedIn(true);
       sessionStorage.setItem("isLoggedIn", "true");
       setLoginError("");
@@ -133,16 +133,16 @@ export default function App() {
 
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-1">Username</label>
+                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block mb-1">Email Address</label>
                 <div className="relative">
                   <span className="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
                     <User className="w-4 h-4" />
                   </span>
                   <input 
-                    type="text" 
+                    type="email" 
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="admin"
+                    placeholder="ongolepolice100@gmail.com"
                     required
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 pl-10 pr-4 text-xs font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-emerald-500 focus:bg-white focus:ring-1 focus:ring-emerald-500/30 transition-all"
                   />
