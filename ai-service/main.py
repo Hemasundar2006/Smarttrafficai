@@ -6,16 +6,62 @@ import requests
 from datetime import datetime
 
 from download_sample import download_video
-from detector import detect_and_track
 from signal_logic import SignalCycle
 from violation import ViolationDetector
-from plate_ocr import read_plate
 from flask import Flask, Response
 from flask_cors import CORS
 import threading
 import numpy as np
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "https://smart-traffic-backend-x5ke.onrender.com/api")
+IS_RENDER = os.environ.get("RENDER") == "true"
+
+if not IS_RENDER:
+    from detector import detect_and_track
+    from plate_ocr import read_plate
+else:
+    print("[Render Mode] Running in low-memory Mock AI Mode to fit 512MB RAM constraint.")
+    import random
+    
+    # Persistent mock tracking database
+    mock_vehicles = {}
+    
+    def detect_and_track(frame):
+        global mock_vehicles
+        # Update existing positions or spawn new ones
+        height, width = frame.shape[:2]
+        
+        # Clean up out-of-screen mock vehicles
+        mock_vehicles = {vid: v for vid, v in mock_vehicles.items() if v["bbox"][1] < height}
+        
+        # Spawn a new vehicle with small probability
+        if len(mock_vehicles) < 3 and random.random() < 0.05:
+            vid = random.randint(100, 999)
+            x_center = width // 2
+            mock_vehicles[vid] = {
+                "id": vid,
+                "cls": random.choice([2, 5, 7]), # car, bus, truck
+                "bbox": [x_center - 20, 50, x_center + 20, 90],
+                "conf": 0.95,
+                "lane": "north"
+            }
+            
+        # Move vehicles downwards
+        for vid, v in mock_vehicles.items():
+            bbox = v["bbox"]
+            speed = random.randint(5, 10)
+            bbox[1] += speed
+            bbox[3] += speed
+            # Slight horizontal wiggling
+            bbox[0] += random.randint(-1, 1)
+            bbox[2] += random.randint(-1, 1)
+            
+        return list(mock_vehicles.values())
+        
+    def read_plate(frame, bbox):
+        plates = ["AP27AX9821", "MH12CD5678", "KA03MM1122", "DL04CA4321", "TS09EJ4567"]
+        return random.choice(plates)
+
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:5000/api")
 LANES = ["north", "south", "east", "west"]
 
 # Initialize Flask App for MJPEG streaming
