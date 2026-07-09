@@ -3,7 +3,7 @@ import time
 import os
 import argparse
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 
 from download_sample import download_video
 from signal_logic import SignalCycle
@@ -115,16 +115,18 @@ def push_violation(payload, image_path):
     except requests.exceptions.RequestException as e:
         print(f"Failed to push violation to backend: {e}")
 
-current_backend_src = None
+current_config = {"cameraSource": "0", "manualOverride": False}
 
 def config_poller():
-    global current_backend_src
+    global current_config
     while True:
         try:
-            current_backend_src = fetch_camera_source()
+            r = requests.get(f"{BACKEND_URL}/config", timeout=2)
+            if r.status_code == 200:
+                current_config = r.json()
         except Exception:
             pass
-        time.sleep(5)
+        time.sleep(3)
 
 def run(video_source=0, headless=False):
     # Start background configuration poller
@@ -180,37 +182,39 @@ def run(video_source=0, headless=False):
     try:
         while True:
             # Check if camera source was updated via backend config
-            global current_backend_src
-            if current_backend_src is not None:
-                parsed_src = int(current_backend_src) if current_backend_src.isdigit() else current_backend_src
-                if parsed_src != video_source:
-                    print(f"[ConfigChange] Camera source updated from {video_source} to {parsed_src}. Re-initializing video capture...")
-                    if cap is not None:
-                        cap.release()
-                    
-                    if parsed_src == "sample_traffic.mp4" and not os.path.exists(parsed_src):
-                        download_video()
-                    
-                    video_source = parsed_src
-                    cap = cv2.VideoCapture(video_source)
-                    cap_opened = cap.isOpened()
-                    
-                    if cap_opened:
-                        ok, new_frame = cap.read()
-                        if ok:
-                            frame = new_frame
-                            height, width = frame.shape[:2]
-                            stop_line_y = int(height * 0.7)
-                            stop_line = ((50, stop_line_y), (width - 50, stop_line_y))
-                            violation_detector = ViolationDetector(stop_line)
-                            frame_count = 0
-                            print(f"Video Re-initialized successfully. Resolution: {width}x{height}")
-                        else:
-                            print(f"Error: Could not read frame from new source {video_source}")
-                            cap_opened = False
+            global current_config
+            backend_src = current_config.get("cameraSource", "0")
+            if not backend_src:
+                backend_src = "0"
+            parsed_src = int(backend_src) if str(backend_src).isdigit() else backend_src
+            if parsed_src != video_source:
+                print(f"[ConfigChange] Camera source updated from {video_source} to {parsed_src}. Re-initializing video capture...")
+                if cap is not None:
+                    cap.release()
+                
+                if parsed_src == "sample_traffic.mp4" and not os.path.exists(parsed_src):
+                    download_video()
+                
+                video_source = parsed_src
+                cap = cv2.VideoCapture(video_source)
+                cap_opened = cap.isOpened()
+                
+                if cap_opened:
+                    ok, new_frame = cap.read()
+                    if ok:
+                        frame = new_frame
+                        height, width = frame.shape[:2]
+                        stop_line_y = int(height * 0.7)
+                        stop_line = ((50, stop_line_y), (width - 50, stop_line_y))
+                        violation_detector = ViolationDetector(stop_line)
+                        frame_count = 0
+                        print(f"Video Re-initialized successfully. Resolution: {width}x{height}")
                     else:
-                        print(f"Error: Could not open new source {video_source}")
+                        print(f"Error: Could not read frame from new source {video_source}")
                         cap_opened = False
+                else:
+                    print(f"Error: Could not open new source {video_source}")
+                    cap_opened = False
 
             # Read next frame if camera is open and working
             ok = False
@@ -248,20 +252,34 @@ def run(video_source=0, headless=False):
             for v in vehicles:
                 lane_counts[v["lane"]] += 1
 
-            # Update traffic signal cycles (dynamic timers)
-            signal_states, time_remaining = cycle.update(lane_counts)
+            # Update traffic signal cycles (dynamic timers) or fetch manual signals in override mode
+            is_manual = current_config.get("manualOverride", False)
+            if is_manual:
+                manual_states = fetch_signal_states()
+                signal_states = {}
+                for lane in LANES:
+                    lane_info = manual_states.get(lane, {"signal": "RED", "duration": 0, "count": 0})
+                    signal_states[lane] = {
+                        "signal": lane_info.get("signal", "RED"),
+                        "duration": lane_info.get("duration", 0),
+                        "count": lane_info.get("count", 0)
+                    }
+                time_remaining = 0
+            else:
+                signal_states, time_remaining = cycle.update(lane_counts)
 
-            # Sync signal states to Backend API periodically
-            now = time.time()
-            if now - last_sync_time >= sync_interval:
-                for lane, state_info in signal_states.items():
-                    push_signal_state({
-                        "lane": lane,
-                        "signal": state_info["signal"],
-                        "duration": time_remaining if state_info["signal"] in ["GREEN", "ORANGE"] else state_info["duration"],
-                        "count": state_info["count"]
-                    })
-                last_sync_time = now
+            # Sync signal states to Backend API periodically (only if NOT in manual override)
+            if not is_manual:
+                now = time.time()
+                if now - last_sync_time >= sync_interval:
+                    for lane, state_info in signal_states.items():
+                        push_signal_state({
+                            "lane": lane,
+                            "signal": state_info["signal"],
+                            "duration": time_remaining if state_info["signal"] in ["GREEN", "ORANGE"] else state_info["duration"],
+                            "count": state_info["count"]
+                        })
+                    last_sync_time = now
 
             # Reset violation detector for lanes that are GREEN or ORANGE
             for lane, state_info in signal_states.items():
@@ -330,7 +348,7 @@ def run(video_source=0, headless=False):
                     "lane": v["lane"],
                     "vehicleId": v["id"],
                     "plate": plate or "UNREADABLE",
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }, local_filename)
 
             # Display frame if not running in headless mode
@@ -345,6 +363,16 @@ def run(video_source=0, headless=False):
         cap.release()
         cv2.destroyAllWindows()
         print("Video capture stopped and resources released.")
+
+def fetch_signal_states():
+    try:
+        r = requests.get(f"{BACKEND_URL}/signal", timeout=2)
+        if r.status_code == 200:
+            states_list = r.json()
+            return {s["lane"]: s for s in states_list}
+    except Exception as e:
+        print(f"[Signals] Failed to fetch signal states: {e}")
+    return {}
 
 def fetch_camera_source():
     try:

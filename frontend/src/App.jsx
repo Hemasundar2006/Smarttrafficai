@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getSignals, getViolations, login, getConfig, updateConfig } from "./api";
+import { getSignals, getViolations, login, getConfig, updateConfig, issueChallan, updateSignal } from "./api";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { 
   Activity, 
@@ -36,6 +36,7 @@ export default function App() {
   const [selectedViolation, setSelectedViolation] = useState(null);
   const [dashboardMode, setDashboardMode] = useState("control"); // "control" (surveillance) or "testing" (prototype)
   const [cameraSource, setCameraSource] = useState("0");
+  const [manualOverride, setManualOverride] = useState(false);
   
   // Login State
   const [isLoggedIn, setIsLoggedIn] = useState(() => {
@@ -68,12 +69,56 @@ export default function App() {
 
   const handleSourceChange = async (newSource) => {
     try {
-      const res = await updateConfig(newSource);
+      const res = await updateConfig(newSource, undefined);
       if (res.data) {
         setCameraSource(res.data.cameraSource);
       }
     } catch (err) {
       console.error("Failed to update camera source:", err);
+    }
+  };
+
+  const handleOverrideToggle = async (overrideValue) => {
+    try {
+      const res = await updateConfig(undefined, overrideValue);
+      if (res.data) {
+        setManualOverride(res.data.manualOverride);
+      }
+    } catch (err) {
+      console.error("Failed to update manual override config:", err);
+    }
+  };
+
+  const handleSignalClick = async (lane, currentSignal) => {
+    if (!manualOverride) return;
+    
+    // Cycle signal: RED -> GREEN -> ORANGE -> RED
+    let nextSignal = "RED";
+    if (currentSignal === "RED") nextSignal = "GREEN";
+    else if (currentSignal === "GREEN") nextSignal = "ORANGE";
+    else if (currentSignal === "ORANGE") nextSignal = "RED";
+    
+    try {
+      const res = await updateSignal(lane, nextSignal, 15, 0);
+      if (res.data) {
+        setSignals(prev => prev.map(s => s.lane === lane ? { ...s, signal: nextSignal, duration: 15 } : s));
+      }
+    } catch (err) {
+      console.error("Failed to update manual signal:", err);
+    }
+  };
+
+  const handleIssueChallan = async (violationId) => {
+    try {
+      const res = await issueChallan(violationId);
+      if (res.data) {
+        setViolations(prev => prev.map(v => v._id === violationId ? { ...v, challanGenerated: true } : v));
+        setSelectedViolation(prev => prev._id === violationId ? { ...prev, challanGenerated: true } : prev);
+        alert("Challan successfully generated and issued to the offender!");
+      }
+    } catch (err) {
+      console.error("Failed to issue challan:", err);
+      alert("Failed to issue challan. Please try again.");
     }
   };
 
@@ -93,6 +138,7 @@ export default function App() {
       setViolations(v.data || []);
       if (c && c.data) {
         setCameraSource(c.data.cameraSource || "0");
+        setManualOverride(c.data.manualOverride || false);
       }
       setIsConnected(true);
     } catch (err) {
@@ -462,6 +508,22 @@ export default function App() {
                   <TrafficCone className="w-4.5 h-4.5 text-emerald-600" />
                   <h2 className="text-xs font-bold text-slate-900 uppercase tracking-widest font-hud">Junction Visualizer</h2>
                 </div>
+                
+                {/* Manual Override Switch */}
+                <div className="flex items-center gap-2 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                  <span className="text-[8px] font-hud font-extrabold uppercase tracking-widest text-slate-500">
+                    {manualOverride ? "⚠️ MANUAL CONTROL" : "🤖 AUTOMATIC AI"}
+                  </span>
+                  <label className="relative inline-flex items-center cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer"
+                      checked={manualOverride}
+                      onChange={(e) => handleOverrideToggle(e.target.checked)}
+                    />
+                    <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3.5 after:transition-all peer-checked:bg-emerald-500" />
+                  </label>
+                </div>
               </div>
 
               {/* Junction Grid Graphic */}
@@ -502,7 +564,11 @@ export default function App() {
                       className={`absolute flex items-center gap-1.5 z-20 bg-white border border-slate-200 p-1.5 rounded-lg shadow ${positionClasses[lane]}`}
                     >
                       {/* Traffic Light circle */}
-                      <div className="flex flex-col gap-0.5 bg-slate-50 p-0.5 rounded border border-slate-100">
+                      <div 
+                        onClick={() => handleSignalClick(lane, sig)}
+                        className={`flex flex-col gap-0.5 bg-slate-50 p-0.5 rounded border border-slate-100 ${manualOverride ? "cursor-pointer hover:bg-slate-100 transition-colors" : ""}`}
+                        title={manualOverride ? "Click to change signal state" : ""}
+                      >
                         <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${sig === "RED" ? "bg-rose-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]" : "bg-rose-100"}`} />
                         <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${sig === "ORANGE" ? "bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.5)]" : "bg-amber-100"}`} />
                         <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${sig === "GREEN" ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]" : "bg-emerald-100"}`} />
@@ -636,9 +702,15 @@ export default function App() {
                         <Clock className="w-3 h-3 text-slate-400" />
                         {new Date(v.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
                       </span>
-                      <span className="text-[8px] font-bold text-rose-500 uppercase tracking-widest bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded animate-pulse">
-                        CROSSING
-                      </span>
+                      {v.challanGenerated ? (
+                        <span className="text-[8px] font-bold text-emerald-600 uppercase tracking-widest bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded">
+                          CHALLAN ISSUED
+                        </span>
+                      ) : (
+                        <span className="text-[8px] font-bold text-rose-500 uppercase tracking-widest bg-rose-50 border border-rose-200 px-1.5 py-0.5 rounded animate-pulse">
+                          PENDING REVIEW
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -678,9 +750,15 @@ export default function App() {
                 </div>
                 <div className="text-right">
                   <span className="text-[8px] font-hud font-bold text-slate-400 uppercase tracking-widest block">Status</span>
-                  <span className="text-[9px] font-hud font-bold text-rose-500 uppercase bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded mt-1 inline-block">
-                    FINE ISSUED
-                  </span>
+                  {selectedViolation.challanGenerated ? (
+                    <span className="text-[9px] font-hud font-bold text-emerald-600 uppercase bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded mt-1 inline-block">
+                      CHALLAN ISSUED
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-hud font-bold text-rose-500 uppercase bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded mt-1 inline-block animate-pulse">
+                      PENDING REVIEW
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -747,15 +825,26 @@ export default function App() {
                 <button
                   onClick={() => alert("Challan receipt download started.")}
                   className="flex-1 bg-white border border-slate-200 hover:border-slate-350 font-hud text-[10px] font-bold text-slate-750 uppercase tracking-widest py-2.5 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                  disabled={!selectedViolation.challanGenerated}
+                  style={{ opacity: selectedViolation.challanGenerated ? 1 : 0.5 }}
                 >
                   <Download className="w-3.5 h-3.5" /> Download Invoice
                 </button>
-                <button
-                  onClick={() => alert("Challan printed. Dispatch notification sent.")}
-                  className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-hud text-[10px] font-bold uppercase tracking-widest py-2.5 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-[0_3px_10px_rgba(16,185,129,0.15)]"
-                >
-                  <CheckCircle className="w-3.5 h-3.5" /> Dispatch Citation
-                </button>
+                {selectedViolation.challanGenerated ? (
+                  <button
+                    className="flex-1 bg-slate-100 border border-slate-200 text-slate-400 font-hud text-[10px] font-bold uppercase tracking-widest py-2.5 rounded-xl flex items-center justify-center gap-1.5 cursor-not-allowed"
+                    disabled
+                  >
+                    <CheckCircle className="w-3.5 h-3.5 text-slate-400" /> Challan Issued
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleIssueChallan(selectedViolation._id)}
+                    className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-hud text-[10px] font-bold uppercase tracking-widest py-2.5 rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-all shadow-[0_3px_10px_rgba(16,185,129,0.15)] animate-pulse"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" /> Issue Challan
+                  </button>
+                )}
               </div>
 
             </div>

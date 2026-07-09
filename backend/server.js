@@ -38,7 +38,8 @@ const upload = multer({ storage });
 
 // Define Config model directly for persistent remote system configuration
 const configSchema = new mongoose.Schema({
-  cameraSource: { type: String, default: "0" }
+  cameraSource: { type: String, default: "0" },
+  manualOverride: { type: Boolean, default: false }
 });
 const Config = mongoose.model("Config", configSchema);
 
@@ -115,17 +116,22 @@ app.get("/api/config", async (req, res) => {
 
 app.post("/api/config", async (req, res) => {
   try {
-    const { cameraSource } = req.body;
-    if (cameraSource === undefined) {
-      return res.status(400).json({ error: "cameraSource is required" });
+    const { cameraSource, manualOverride } = req.body;
+    if (cameraSource === undefined && manualOverride === undefined) {
+      return res.status(400).json({ error: "cameraSource or manualOverride is required" });
     }
     let cfg = await Config.findOne();
     if (!cfg) {
       cfg = new Config();
     }
-    cfg.cameraSource = String(cameraSource);
+    if (cameraSource !== undefined) {
+      cfg.cameraSource = String(cameraSource);
+    }
+    if (manualOverride !== undefined) {
+      cfg.manualOverride = Boolean(manualOverride);
+    }
     await cfg.save();
-    console.log(`[Config Updated] Camera Source set to: ${cameraSource}`);
+    console.log(`[Config Updated] Camera Source set to: ${cfg.cameraSource}, Manual Override: ${cfg.manualOverride}`);
     res.json(cfg);
   } catch (error) {
     console.error("Error updating config:", error);
@@ -192,6 +198,25 @@ app.get("/api/violations", async (req, res) => {
   } catch (error) {
     console.error("Error retrieving violations:", error);
     res.status(550).json({ error: "Internal Server Error" });
+  }
+});
+
+app.post("/api/violations/:id/challan", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const violation = await Violation.findByIdAndUpdate(
+      id,
+      { challanGenerated: true },
+      { new: true }
+    );
+    if (!violation) {
+      return res.status(404).json({ error: "Violation not found" });
+    }
+    console.log(`[Challan Issued] Issued citation for Violation ID: ${id}, Plate: ${violation.plate}`);
+    res.json(violation);
+  } catch (error) {
+    console.error("Error issuing challan:", error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
