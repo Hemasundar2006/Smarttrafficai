@@ -13,6 +13,7 @@ from plate_ocr import read_plate
 from flask import Flask, Response
 from flask_cors import CORS
 import threading
+import numpy as np
 
 BACKEND_URL = os.environ.get("BACKEND_URL", "https://smart-traffic-backend-x5ke.onrender.com/api")
 LANES = ["north", "south", "east", "west"]
@@ -94,20 +95,25 @@ def run(video_source=0, headless=False):
     flask_thread.start()
     print("[Flask] Live streaming server started on http://localhost:5001/video_feed")
 
+    # Initialize VideoCapture safely
     cap = cv2.VideoCapture(video_source)
-    if not cap.isOpened():
-        print(f"Error: Could not open video source {video_source}")
-        return
-
-    # Read first frame to establish dimensions and stop line
-    ok, frame = cap.read()
-    if not ok:
-        print("Error: Could not read first frame.")
-        cap.release()
-        return
-
-    height, width = frame.shape[:2]
-    print(f"Video Resolution: {width}x{height}")
+    cap_opened = cap.isOpened()
+    
+    # Default dimensions
+    width, height = 640, 480
+    frame = None
+    
+    if cap_opened:
+        ok, first_frame = cap.read()
+        if ok:
+            frame = first_frame
+            height, width = frame.shape[:2]
+            print(f"Video Resolution: {width}x{height}")
+        else:
+            print("Warning: Could not read first frame.")
+            cap_opened = False
+    else:
+        print(f"Warning: Could not open video source {video_source}")
 
     # Set Stop Line dynamically at 70% of frame height
     stop_line_y = int(height * 0.7)
@@ -132,36 +138,63 @@ def run(video_source=0, headless=False):
                 parsed_src = int(current_backend_src) if current_backend_src.isdigit() else current_backend_src
                 if parsed_src != video_source:
                     print(f"[ConfigChange] Camera source updated from {video_source} to {parsed_src}. Re-initializing video capture...")
-                    cap.release()
+                    if cap is not None:
+                        cap.release()
                     
                     if parsed_src == "sample_traffic.mp4" and not os.path.exists(parsed_src):
                         download_video()
                     
                     video_source = parsed_src
                     cap = cv2.VideoCapture(video_source)
+                    cap_opened = cap.isOpened()
                     
-                    ok, new_frame = cap.read()
-                    if ok:
-                        frame = new_frame
-                        height, width = frame.shape[:2]
-                        stop_line_y = int(height * 0.7)
-                        stop_line = ((50, stop_line_y), (width - 50, stop_line_y))
-                        violation_detector = ViolationDetector(stop_line)
-                        frame_count = 0
-                        print(f"Video Re-initialized successfully. Resolution: {width}x{height}")
+                    if cap_opened:
+                        ok, new_frame = cap.read()
+                        if ok:
+                            frame = new_frame
+                            height, width = frame.shape[:2]
+                            stop_line_y = int(height * 0.7)
+                            stop_line = ((50, stop_line_y), (width - 50, stop_line_y))
+                            violation_detector = ViolationDetector(stop_line)
+                            frame_count = 0
+                            print(f"Video Re-initialized successfully. Resolution: {width}x{height}")
+                        else:
+                            print(f"Error: Could not read frame from new source {video_source}")
+                            cap_opened = False
                     else:
-                        print(f"Error: Could not read frame from new source {video_source}")
+                        print(f"Error: Could not open new source {video_source}")
+                        cap_opened = False
 
-            # For video playback, read next frame.
-            if frame_count > 0:
-                ok, frame = cap.read()
+            # Read next frame if camera is open and working
+            ok = False
+            if cap_opened:
+                if frame_count == 0 and frame is not None:
+                    # We already read the first frame during initialization
+                    ok = True
+                else:
+                    ok, frame = cap.read()
+                
                 if not ok:
                     print("End of video stream or failed to read frame.")
-                    break
-            frame_count += 1
+                    cap_opened = False
+                frame_count += 1
 
-            # Detect & Track Vehicles
-            vehicles = detect_and_track(frame)
+            if not ok or frame is None:
+                # Generate a placeholder black frame when camera is offline
+                frame = np.zeros((height, width, 3), dtype=np.uint8)
+                cv2.putText(frame, "CAMERA OFFLINE / DISCONNECTED", (width // 10, height // 2), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+                cv2.putText(frame, f"Source: {video_source}", (width // 10, height // 2 + 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+                
+                # Sleep a little to prevent high CPU utilization in failure loops
+                time.sleep(0.2)
+                
+                # Skip vehicle detection but keep main logic moving
+                vehicles = []
+            else:
+                # Detect & Track Vehicles
+                vehicles = detect_and_track(frame)
             
             # Aggregate counts for each virtual lane in this frame
             lane_counts = {lane: 0 for lane in LANES}

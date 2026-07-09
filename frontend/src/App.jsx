@@ -361,7 +361,7 @@ export default function App() {
                 <div className="flex items-center gap-2">
                   <Video className="w-4.5 h-4.5 text-emerald-600" />
                   <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest font-hud">
-                    Junction Camera - {cameraSource === "0" ? "Webcam" : "Demo Video"}
+                    Junction Camera - {cameraSource === "sample_traffic.mp4" ? "Demo Video" : `Camera (Source ${cameraSource})`}
                   </h3>
                 </div>
                 <div className="flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-0.5 rounded-full">
@@ -402,21 +402,50 @@ export default function App() {
                 <div className="mt-4 p-3.5 bg-slate-50 border border-slate-200 rounded-xl flex flex-col gap-2 relative z-10">
                   <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-wider">
                     <span>Active Stream Source:</span>
-                    <span className="font-hud text-emerald-600 font-extrabold">{cameraSource === "0" ? "📷 WEBCAM" : "🧪 PROTOTYPE VIDEO"}</span>
+                    <span className="font-hud text-emerald-600 font-extrabold">
+                      {cameraSource === "sample_traffic.mp4" ? "🧪 PROTOTYPE VIDEO" : cameraSource === "0" ? "📷 PRIMARY WEBCAM" : cameraSource === "1" ? "📷 SECONDARY WEBCAM" : cameraSource === "2" ? "📷 WEBCAM 2" : `⚙️ CUSTOM (${cameraSource})`}
+                    </span>
                   </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleSourceChange("sample_traffic.mp4")}
-                      className={`flex-1 py-2 px-3 rounded-lg text-[9px] font-hud font-extrabold uppercase tracking-widest cursor-pointer transition-all border ${cameraSource === "sample_traffic.mp4" ? "bg-emerald-500 text-white border-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.15)]" : "bg-white text-slate-650 border-slate-200 hover:border-slate-355"}`}
+                  <div className="flex flex-col gap-2">
+                    <select
+                      value={["sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) ? cameraSource : "custom"}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val !== "custom") {
+                          handleSourceChange(val);
+                        } else {
+                          handleSourceChange("");
+                        }
+                      }}
+                      className="w-full py-2 px-3 rounded-lg text-[10px] font-hud font-bold uppercase tracking-widest cursor-pointer bg-white text-slate-750 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     >
-                      🧪 Run Demo Video
-                    </button>
-                    <button
-                      onClick={() => handleSourceChange("0")}
-                      className={`flex-1 py-2 px-3 rounded-lg text-[9px] font-hud font-extrabold uppercase tracking-widest cursor-pointer transition-all border ${cameraSource === "0" ? "bg-emerald-500 text-white border-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.15)]" : "bg-white text-slate-650 border-slate-200 hover:border-slate-355"}`}
-                    >
-                      📷 Run Live Webcam
-                    </button>
+                      <option value="sample_traffic.mp4">🧪 Run Demo Video</option>
+                      <option value="0">📷 Primary Webcam (Index 0)</option>
+                      <option value="1">📷 Secondary Webcam (Index 1)</option>
+                      <option value="2">📷 Webcam (Index 2)</option>
+                      <option value="custom">⚙️ Enter Custom Source...</option>
+                    </select>
+
+                    {!["sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) && (
+                      <div className="flex gap-2 mt-1">
+                        <input
+                          type="text"
+                          placeholder="Enter index (e.g. 3) or source path"
+                          defaultValue={cameraSource}
+                          onBlur={(e) => {
+                            if (e.target.value.trim() !== "") {
+                              handleSourceChange(e.target.value.trim());
+                            }
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && e.target.value.trim() !== "") {
+                              handleSourceChange(e.target.value.trim());
+                            }
+                          }}
+                          className="flex-1 py-1.5 px-3 rounded-lg text-[10px] border border-slate-200 bg-white focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
