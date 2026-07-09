@@ -10,10 +10,11 @@ from signal_logic import SignalCycle
 from violation import ViolationDetector
 from flask import Flask, Response
 from flask_cors import CORS
-import threading
+import sys
 import numpy as np
+import threading
 
-IS_RENDER = os.environ.get("RENDER") == "true"
+IS_RENDER = (os.environ.get("RENDER") == "true") or ("--mock" in sys.argv)
 
 if not IS_RENDER:
     from detector import detect_and_track
@@ -360,6 +361,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Smart AI Traffic Management System Controller")
     parser.add_argument("--source", type=str, default=None, help="Video source file or camera index (default: 0 for webcam)")
     parser.add_argument("--headless", action="store_true", help="Run without opening window visualization (useful for servers)")
+    parser.add_argument("--mock", action="store_true", help="Run in low-memory Mock AI Mode (bypasses YOLO/OCR)")
     args = parser.parse_args()
 
     # If source is explicitly provided, use it. Otherwise fallback to database config or default '0'
