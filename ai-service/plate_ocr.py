@@ -17,17 +17,15 @@ def get_reader():
 
 def run_ocr_on_crop(crop):
     """
-    Converts crop to grayscale, enlarges it by 2x, and runs EasyOCR text extraction.
+    Converts crop to grayscale and runs EasyOCR text extraction with contrast enhancement.
     """
     try:
-        # Preprocessing: Convert to grayscale for high contrast
+        # Preprocessing: Convert to grayscale
         gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
         
-        # Preprocessing: Resize/Upscale by 2x to make text larger and readable
-        resized = cv2.resize(gray, (0, 0), fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC)
-        
         ocr_reader = get_reader()
-        results = ocr_reader.readtext(resized)
+        # Use EasyOCR built-in magnification and contrast adjustment for better accuracy on webcams
+        results = ocr_reader.readtext(gray, mag_ratio=2.0, contrast_ths=0.1, adjust_contrast=True)
         
         candidates = []
         for bbox_ocr, text, conf in results:

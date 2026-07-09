@@ -24,16 +24,8 @@ if (!fs.existsSync(uploadsDir)) {
 }
 app.use("/uploads", express.static(uploadsDir));
 
-// Configure multer to retain file extensions
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname || ".jpg"));
-  }
-});
+// Configure multer to use memory storage for cloud deployment compatibility
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
 // Define Config model directly for persistent remote system configuration
@@ -173,7 +165,12 @@ app.get("/api/signal", async (req, res) => {
 app.post("/api/violations", upload.single("image"), async (req, res) => {
   try {
     const { lane, vehicleId, plate, timestamp } = req.body;
-    const imageUrl = req.file ? `/uploads/${req.file.filename}` : null;
+    let imageUrl = null;
+    if (req.file) {
+      const base64Data = req.file.buffer.toString('base64');
+      // Convert buffer to base64 data URI to store directly in MongoDB (cloud safe)
+      imageUrl = `data:${req.file.mimetype || 'image/jpeg'};base64,${base64Data}`;
+    }
 
     const violation = await Violation.create({
       lane,
