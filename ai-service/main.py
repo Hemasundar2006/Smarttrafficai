@@ -62,7 +62,7 @@ else:
         plates = ["AP27AX9821", "MH12CD5678", "KA03MM1122", "DL04CA4321", "TS09EJ4567"]
         return random.choice(plates)
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:5000/api")
+BACKEND_URL = os.environ.get("BACKEND_URL", "https://smart-traffic-backend-x5ke.onrender.com/api")
 LANES = ["north", "south", "east", "west"]
 
 # Initialize Flask App for MJPEG streaming
