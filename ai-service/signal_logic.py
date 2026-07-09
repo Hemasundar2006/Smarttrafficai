@@ -17,9 +17,9 @@ class SignalCycle:
         self.durations = {lane: 0 for lane in lanes}
         
         # State tracking for Moderate density countdown
-        self.orange_countdown = 10
+        self.moderate_countdown = 10
         self.last_countdown_time = 0
-        self.moderate_completed = False
+        self.moderate_phase = "COMPLETED" # "ORANGE", "GREEN", "COMPLETED"
         
         # Track previous density state to detect transitions
         self.prev_state_type = None
@@ -46,8 +46,8 @@ class SignalCycle:
             
         # Reset countdown state if density level changes
         if current_state_type != self.prev_state_type:
-            self.moderate_completed = False
-            self.orange_countdown = 10
+            self.moderate_phase = "ORANGE"
+            self.moderate_countdown = 10
             self.prev_state_type = current_state_type
 
         # State machine logic for webcam lane
@@ -62,28 +62,41 @@ class SignalCycle:
             self.durations[self.webcam_lane] = 0
             
         else: # MODERATE
-            # 3. Moderate Traffic -> ORANGE light with 10s countdown, then RED
-            if self.moderate_completed:
+            # 3. Moderate Traffic -> ORANGE light (10s), then GREEN (10s), then RED
+            if self.moderate_phase == "COMPLETED":
                 self.current_signals[self.webcam_lane] = "RED"
                 self.durations[self.webcam_lane] = 0
-            else:
+            
+            elif self.moderate_phase == "ORANGE":
                 if self.current_signals[self.webcam_lane] != "ORANGE":
                     self.current_signals[self.webcam_lane] = "ORANGE"
-                    self.orange_countdown = 10
+                    self.moderate_countdown = 10
                     self.last_countdown_time = now
                 else:
-                    # Decrement countdown every 1.0s
                     if now - self.last_countdown_time >= 1.0:
-                        self.orange_countdown = max(0, self.orange_countdown - 1)
+                        self.moderate_countdown = max(0, self.moderate_countdown - 1)
                         self.last_countdown_time = now
-                        if self.orange_countdown == 0:
-                            # Countdown complete -> transition to RED
+                        if self.moderate_countdown == 0:
+                            # Countdown complete -> transition to GREEN phase
+                            self.moderate_phase = "GREEN"
+                            self.current_signals[self.webcam_lane] = "GREEN"
+                            self.moderate_countdown = 10
+                            
+            elif self.moderate_phase == "GREEN":
+                if self.current_signals[self.webcam_lane] != "GREEN":
+                    self.current_signals[self.webcam_lane] = "GREEN"
+                else:
+                    if now - self.last_countdown_time >= 1.0:
+                        self.moderate_countdown = max(0, self.moderate_countdown - 1)
+                        self.last_countdown_time = now
+                        if self.moderate_countdown == 0:
+                            # Countdown complete -> transition to COMPLETED (RED)
+                            self.moderate_phase = "COMPLETED"
                             self.current_signals[self.webcam_lane] = "RED"
                             self.durations[self.webcam_lane] = 0
-                            self.moderate_completed = True
-                            
-                if self.current_signals[self.webcam_lane] == "ORANGE":
-                    self.durations[self.webcam_lane] = self.orange_countdown
+
+            if self.moderate_phase in ["ORANGE", "GREEN"]:
+                self.durations[self.webcam_lane] = self.moderate_countdown
 
         # Update other lanes to remain RED for simplicity during the webcam demo
         for lane in self.lanes:
@@ -105,5 +118,5 @@ class SignalCycle:
         return state, active_duration
 
     def force_advance(self):
-        self.moderate_completed = False
-        self.orange_countdown = 10
+        self.moderate_phase = "ORANGE"
+        self.moderate_countdown = 10

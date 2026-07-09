@@ -22,11 +22,8 @@ import {
   LogOut
 } from "lucide-react";
 
-const backendBaseUrl = import.meta.env.VITE_API_URL 
-  ? import.meta.env.VITE_API_URL.replace(/\/api$/, "") 
-  : "https://smart-traffic-backend-x5ke.onrender.com";
-
-const aiStreamUrl = import.meta.env.VITE_AI_STREAM_URL || "http://localhost:5001/video_feed";
+const backendBaseUrl = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000/api`;
+const aiStreamUrl = import.meta.env.VITE_AI_STREAM_URL || `http://${window.location.hostname}:5001/video_feed`;
 
 export default function App() {
   const [signals, setSignals] = useState([]);
@@ -290,7 +287,7 @@ export default function App() {
             onClick={() => setDashboardMode("testing")}
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-[10px] font-hud font-bold tracking-wider uppercase transition-all cursor-pointer ${dashboardMode === "testing" ? "bg-white text-emerald-600 shadow-sm border border-slate-200/50" : "text-slate-400 hover:text-slate-650"}`}
           >
-            🧪 Testing Portal
+            🧪 CCTV Feed
           </button>
         </div>
 
@@ -449,12 +446,12 @@ export default function App() {
                   <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-wider">
                     <span>Active Stream Source:</span>
                     <span className="font-hud text-emerald-600 font-extrabold">
-                      {cameraSource === "sample_traffic.mp4" ? "🧪 PROTOTYPE VIDEO" : cameraSource === "0" ? "📷 PRIMARY WEBCAM" : cameraSource === "1" ? "📷 SECONDARY WEBCAM" : cameraSource === "2" ? "📷 WEBCAM 2" : `⚙️ CUSTOM (${cameraSource})`}
+                      {cameraSource === "standby" ? "🛑 STANDBY (OFF)" : cameraSource === "sample_traffic.mp4" ? "🧪 PROTOTYPE VIDEO" : cameraSource === "0" ? "📷 PRIMARY WEBCAM" : cameraSource === "1" ? "📷 SECONDARY WEBCAM" : cameraSource === "2" ? "📷 WEBCAM 2" : `⚙️ CUSTOM (${cameraSource})`}
                     </span>
                   </div>
                   <div className="flex flex-col gap-2">
                     <select
-                      value={["sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) ? cameraSource : "custom"}
+                      value={["standby", "sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) ? cameraSource : "custom"}
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val !== "custom") {
@@ -465,6 +462,7 @@ export default function App() {
                       }}
                       className="w-full py-2 px-3 rounded-lg text-[10px] font-hud font-bold uppercase tracking-widest cursor-pointer bg-white text-slate-750 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                     >
+                      <option value="standby">🛑 Standby Mode (Camera Off)</option>
                       <option value="sample_traffic.mp4">🧪 Run Demo Video</option>
                       <option value="0">📷 Primary Webcam (Index 0)</option>
                       <option value="1">📷 Secondary Webcam (Index 1)</option>
@@ -472,7 +470,7 @@ export default function App() {
                       <option value="custom">⚙️ Enter Custom Source...</option>
                     </select>
 
-                    {!["sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) && (
+                    {!["standby", "sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) && (
                       <div className="flex gap-2 mt-1">
                         <input
                           type="text"
@@ -717,8 +715,7 @@ export default function App() {
               ))
             )}
           </div>
-
-        </div>
+          </div>
 
       </main>
       
@@ -762,13 +759,33 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Full Screenshot Proof */}
-              <div className="w-full bg-slate-900 rounded-xl overflow-hidden border border-slate-150 aspect-video mb-4 flex items-center justify-center relative shadow-inner">
-                <img 
-                  src={`${backendBaseUrl}${selectedViolation.imageUrl}`} 
-                  alt="Violation Screenshot" 
-                  className="w-full h-full object-contain"
-                />
+              {/* Vehicle and Plate Crop Proofs */}
+              <div className="flex flex-col md:flex-row gap-4 mb-4">
+                <div className="flex-1 bg-slate-900 rounded-xl overflow-hidden border border-slate-150 aspect-video flex items-center justify-center relative shadow-inner">
+                  {selectedViolation.imageUrl ? (
+                    <img 
+                      src={selectedViolation.imageUrl.startsWith("data:image/") ? selectedViolation.imageUrl : `${backendBaseUrl}${selectedViolation.imageUrl}`} 
+                      alt="Vehicle Screenshot" 
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-slate-500 font-hud text-xs uppercase tracking-widest font-bold">No Vehicle Image</span>
+                  )}
+                  <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-[8px] font-bold text-white uppercase tracking-widest border border-white/10 font-hud">Vehicle Camera Crop</div>
+                </div>
+                
+                <div className="flex-1 bg-slate-900 rounded-xl overflow-hidden border border-slate-150 aspect-video flex items-center justify-center relative shadow-inner">
+                  {selectedViolation.plateImageUrl ? (
+                    <img 
+                      src={selectedViolation.plateImageUrl.startsWith("data:image/") ? selectedViolation.plateImageUrl : `${backendBaseUrl}${selectedViolation.plateImageUrl}`} 
+                      alt="Plate Screenshot" 
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-slate-500 font-hud text-xs uppercase tracking-widest font-bold">No Plate Image</span>
+                  )}
+                  <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md px-2 py-1 rounded-md text-[8px] font-bold text-white uppercase tracking-widest border border-white/10 font-hud">Plate Camera Crop</div>
+                </div>
               </div>
 
               {/* Invoice Fine Details Grid */}

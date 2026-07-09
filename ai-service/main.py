@@ -144,9 +144,13 @@ def run(video_source=0, headless=False):
     flask_thread.start()
     print("[Flask] Live streaming server started on http://localhost:5001/video_feed")
 
-    # Initialize VideoCapture safely
-    cap = cv2.VideoCapture(video_source)
-    cap_opened = cap.isOpened()
+    # Initialize VideoCapture safely if not in standby
+    cap = None
+    cap_opened = False
+    
+    if video_source != "standby":
+        cap = cv2.VideoCapture(video_source)
+        cap_opened = cap.isOpened()
     
     # Default dimensions
     width, height = 640, 480
@@ -191,30 +195,36 @@ def run(video_source=0, headless=False):
                 print(f"[ConfigChange] Camera source updated from {video_source} to {parsed_src}. Re-initializing video capture...")
                 if cap is not None:
                     cap.release()
-                
-                if parsed_src == "sample_traffic.mp4" and not os.path.exists(parsed_src):
-                    download_video()
+                    cap = None
                 
                 video_source = parsed_src
-                cap = cv2.VideoCapture(video_source)
-                cap_opened = cap.isOpened()
-                
-                if cap_opened:
-                    ok, new_frame = cap.read()
-                    if ok:
-                        frame = new_frame
-                        height, width = frame.shape[:2]
-                        stop_line_y = int(height * 0.7)
-                        stop_line = ((50, stop_line_y), (width - 50, stop_line_y))
-                        violation_detector = ViolationDetector(stop_line)
-                        frame_count = 0
-                        print(f"Video Re-initialized successfully. Resolution: {width}x{height}")
-                    else:
-                        print(f"Error: Could not read frame from new source {video_source}")
-                        cap_opened = False
-                else:
-                    print(f"Error: Could not open new source {video_source}")
+
+                if parsed_src == "standby":
+                    print("Entering Standby Mode (Camera OFF, AI OFF)")
                     cap_opened = False
+                else:
+                    if parsed_src == "sample_traffic.mp4" and not os.path.exists(parsed_src):
+                        download_video()
+                    
+                    cap = cv2.VideoCapture(video_source)
+                    cap_opened = cap.isOpened()
+                    
+                    if cap_opened:
+                        ok, new_frame = cap.read()
+                        if ok:
+                            frame = new_frame
+                            height, width = frame.shape[:2]
+                            stop_line_y = int(height * 0.7)
+                            stop_line = ((50, stop_line_y), (width - 50, stop_line_y))
+                            violation_detector = ViolationDetector(stop_line)
+                            frame_count = 0
+                            print(f"Video Re-initialized successfully. Resolution: {width}x{height}")
+                        else:
+                            print(f"Error: Could not read frame from new source {video_source}")
+                            cap_opened = False
+                    else:
+                        print(f"Error: Could not open new source {video_source}")
+                        cap_opened = False
 
             # Read next frame if camera is open and working
             ok = False
@@ -230,7 +240,20 @@ def run(video_source=0, headless=False):
                     cap_opened = False
                 frame_count += 1
 
-            if not ok or frame is None:
+            if video_source == "standby":
+                # Generate a generic STANDBY frame
+                frame = np.zeros((height, width, 3), dtype=np.uint8)
+                cv2.putText(frame, "AI ENGINE: STANDBY (0% CPU)", (width // 10, height // 2), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+                cv2.putText(frame, "Waiting for camera selection in dashboard...", (width // 10, height // 2 + 30), 
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 1)
+                
+                # Sleep a little to prevent high CPU utilization
+                time.sleep(0.5)
+                
+                # Skip vehicle detection but keep main logic moving
+                vehicles = []
+            elif not ok or frame is None:
                 # Generate a placeholder black frame when camera is offline
                 frame = np.zeros((height, width, 3), dtype=np.uint8)
                 cv2.putText(frame, "CAMERA OFFLINE / DISCONNECTED", (width // 10, height // 2), 
@@ -378,12 +401,12 @@ def fetch_camera_source():
     try:
         r = requests.get(f"{BACKEND_URL}/config", timeout=2)
         if r.status_code == 200:
-            src = r.json().get("cameraSource", "0")
+            src = r.json().get("cameraSource", "standby")
             print(f"[Config] Loaded camera source from backend: {src}")
             return src
     except Exception as e:
-        print(f"[Config] Could not fetch camera source from backend, using default '0': {e}")
-    return "0"
+        print(f"[Config] Could not fetch camera source from backend, using default 'standby': {e}")
+    return "standby"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Smart AI Traffic Management System Controller")
@@ -392,12 +415,12 @@ if __name__ == "__main__":
     parser.add_argument("--mock", action="store_true", help="Run in low-memory Mock AI Mode (bypasses YOLO/OCR)")
     args = parser.parse_args()
 
-    # If source is explicitly provided, use it. Otherwise fallback to database config or default '0'
+    # If source is explicitly provided, use it. Otherwise fallback to database config or default 'standby'
     if args.source is not None:
         src = args.source
     else:
         backend_src = fetch_camera_source()
-        src = backend_src if backend_src else "0"
+        src = backend_src if backend_src else "standby"
 
     # Determine if source is an integer (camera index)
     if src.isdigit():

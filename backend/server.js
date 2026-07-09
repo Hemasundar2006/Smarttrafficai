@@ -30,7 +30,7 @@ const upload = multer({ storage });
 
 // Define Config model directly for persistent remote system configuration
 const configSchema = new mongoose.Schema({
-  cameraSource: { type: String, default: "0" },
+  cameraSource: { type: String, default: "standby" },
   manualOverride: { type: Boolean, default: false }
 });
 const Config = mongoose.model("Config", configSchema);
