@@ -15,26 +15,52 @@ def get_reader():
         reader = easyocr.Reader(["en"], gpu=False)
     return reader
 
+def preprocess_for_ocr(crop):
+    """
+    Advanced preprocessing for webcam captures (phones/printed plates).
+    Applies Grayscale -> Upscale -> CLAHE -> Bilateral Filter.
+    """
+    # 1. Grayscale
+    gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+    
+    # 2. Upscale (2x) using high-quality interpolation to give AI more pixels
+    gray = cv2.resize(gray, None, fx=2, fy=2, interpolation=cv2.INTER_CUBIC)
+    
+    # 3. Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to defeat glare
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+    gray = clahe.apply(gray)
+    
+    # 4. Bilateral filter to smooth noise but preserve sharp text edges
+    gray = cv2.bilateralFilter(gray, 11, 17, 17)
+    
+    return gray
+
 def run_ocr_on_crop(crop):
     """
-    Converts crop to grayscale and runs EasyOCR text extraction with contrast enhancement.
+    Runs multi-pass EasyOCR on both original grayscale and heavily preprocessed variants.
     """
     try:
-        # Preprocessing: Convert to grayscale
-        gray = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
-        
         ocr_reader = get_reader()
-        # Use EasyOCR built-in magnification and contrast adjustment for better accuracy on webcams
-        results = ocr_reader.readtext(gray, mag_ratio=2.0, contrast_ths=0.1, adjust_contrast=True)
-        
         candidates = []
-        for bbox_ocr, text, conf in results:
-            clean_text = text.upper().replace(" ", "").strip()
-            # Retain only alphanumeric characters
-            clean_text = re.sub(r'[^A-Z0-9]', '', clean_text)
-            # Accept any candidate with conf > 0.1 and length >= 2
-            if conf > 0.1 and len(clean_text) >= 2:
-                candidates.append((clean_text, conf))
+        
+        # Variant 1: Basic grayscale (in case the raw image is already perfect)
+        gray_basic = cv2.cvtColor(crop, cv2.COLOR_BGR2GRAY)
+        
+        # Variant 2: Advanced OpenCV Preprocessing pipeline
+        gray_advanced = preprocess_for_ocr(crop)
+        
+        # Run EasyOCR on both variants to maximize chances of catching hard-to-read text
+        for img_variant in [gray_basic, gray_advanced]:
+            results = ocr_reader.readtext(img_variant, mag_ratio=2.0, contrast_ths=0.1, adjust_contrast=True)
+            
+            for bbox_ocr, text, conf in results:
+                clean_text = text.upper().replace(" ", "").strip()
+                # Retain only alphanumeric characters
+                clean_text = re.sub(r'[^A-Z0-9]', '', clean_text)
+                # Accept any candidate with conf > 0.1 and length >= 2
+                if conf > 0.1 and len(clean_text) >= 2:
+                    candidates.append((clean_text, conf))
+                    
         return candidates
     except Exception as e:
         print(f"Error in run_ocr_on_crop: {e}")

@@ -446,15 +446,25 @@ export default function App() {
                   <div className="flex justify-between items-center text-[9px] font-bold text-slate-500 uppercase tracking-wider">
                     <span>Active Stream Source:</span>
                     <span className="font-hud text-emerald-600 font-extrabold">
-                      {cameraSource === "standby" ? "🛑 STANDBY (OFF)" : cameraSource === "sample_traffic.mp4" ? "🧪 PROTOTYPE VIDEO" : cameraSource === "0" ? "📷 PRIMARY WEBCAM" : cameraSource === "1" ? "📷 SECONDARY WEBCAM" : cameraSource === "2" ? "📷 WEBCAM 2" : `⚙️ CUSTOM (${cameraSource})`}
+                      {cameraSource === "standby" ? "🛑 STANDBY (OFF)" 
+                       : cameraSource === "sample_traffic.mp4" ? "🧪 PROTOTYPE VIDEO" 
+                       : cameraSource === "0" ? "📷 PRIMARY WEBCAM" 
+                       : cameraSource === "1" ? "📷 SECONDARY WEBCAM" 
+                       : cameraSource === "2" ? "📷 WEBCAM 2" 
+                       : cameraSource.startsWith("http") || cameraSource.startsWith("rtsp") ? `📱 MOBILE IP CAMERA` 
+                       : `⚙️ CUSTOM (${cameraSource})`}
                     </span>
                   </div>
                   <div className="flex flex-col gap-2">
                     <select
-                      value={["standby", "sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) ? cameraSource : "custom"}
+                      value={["standby", "sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) 
+                        ? cameraSource 
+                        : (cameraSource.startsWith("http") || cameraSource.startsWith("rtsp") ? "ip_camera" : "custom")}
                       onChange={(e) => {
                         const val = e.target.value;
-                        if (val !== "custom") {
+                        if (val === "ip_camera") {
+                          handleSourceChange("http://192.168.1.5:8080/video"); // Default placeholder
+                        } else if (val !== "custom") {
                           handleSourceChange(val);
                         } else {
                           handleSourceChange("");
@@ -467,19 +477,42 @@ export default function App() {
                       <option value="0">📷 Primary Webcam (Index 0)</option>
                       <option value="1">📷 Secondary Webcam (Index 1)</option>
                       <option value="2">📷 Webcam (Index 2)</option>
+                      <option value="ip_camera">📱 Mobile IP Camera</option>
                       <option value="custom">⚙️ Enter Custom Source...</option>
                     </select>
 
-                    {!["standby", "sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) && (
-                      <div className="flex gap-2 mt-1">
+                    {/* Input for IP Camera */}
+                    {(cameraSource.startsWith("http") || cameraSource.startsWith("rtsp") || cameraSource === "ip_camera") && (
+                      <div className="flex flex-col gap-1 mt-1">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest ml-1">IP Camera URL:</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. http://192.168.1.15:8080/video"
+                          defaultValue={cameraSource === "ip_camera" ? "" : cameraSource}
+                          onBlur={(e) => {
+                            if (e.target.value.trim() !== "") handleSourceChange(e.target.value.trim());
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && e.target.value.trim() !== "") {
+                              handleSourceChange(e.target.value.trim());
+                            }
+                          }}
+                          className="flex-1 py-1.5 px-3 rounded-lg text-[10px] border border-emerald-300 bg-emerald-50 focus:outline-none focus:ring-1 focus:ring-emerald-500 font-mono text-emerald-800"
+                        />
+                      </div>
+                    )}
+
+                    {/* Input for generic Custom Source */}
+                    {!["standby", "sample_traffic.mp4", "0", "1", "2"].includes(cameraSource) 
+                     && !(cameraSource.startsWith("http") || cameraSource.startsWith("rtsp") || cameraSource === "ip_camera") && (
+                      <div className="flex flex-col gap-1 mt-1">
+                        <label className="text-[9px] font-bold text-slate-500 uppercase tracking-widest ml-1">Custom Input:</label>
                         <input
                           type="text"
                           placeholder="Enter index (e.g. 3) or source path"
                           defaultValue={cameraSource}
                           onBlur={(e) => {
-                            if (e.target.value.trim() !== "") {
-                              handleSourceChange(e.target.value.trim());
-                            }
+                            if (e.target.value.trim() !== "") handleSourceChange(e.target.value.trim());
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" && e.target.value.trim() !== "") {
