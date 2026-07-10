@@ -707,7 +707,7 @@ export default function App() {
                   >
                     {v.imageUrl ? (
                       <img 
-                        src={`${backendBaseUrl}${v.imageUrl}`} 
+                        src={v.imageUrl.startsWith("data:image/") ? v.imageUrl : `${backendBaseUrl}${v.imageUrl}`} 
                         alt="Violation Proof"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
