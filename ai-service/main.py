@@ -383,8 +383,10 @@ def run(video_source=0, headless=False):
     except KeyboardInterrupt:
         print("Keyboard interrupt received. Exiting...")
     finally:
-        cap.release()
-        cv2.destroyAllWindows()
+        if cap is not None:
+            cap.release()
+        if not headless:
+            cv2.destroyAllWindows()
         print("Video capture stopped and resources released.")
 
 def fetch_signal_states():
@@ -426,4 +428,4 @@ if __name__ == "__main__":
     if src.isdigit():
         src = int(src)
 
-    run(video_source=src, headless=args.headless)
+    run(video_source=src, headless=args.headless or IS_RENDER)
